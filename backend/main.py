@@ -12,8 +12,15 @@ import docx
 import google.generativeai as genai
 import os
 from dotenv import load_dotenv
+import warnings
+
+# Suppress pdfplumber warnings about CropBox
+warnings.filterwarnings("ignore", message="CropBox missing from /Page, defaulting to MediaBox")
 
 load_dotenv()
+
+TOP_N = int(os.getenv("TOP_N_RESULTS", "5"))  # default 5
+DEFAULT_MODEL = os.getenv("DEFAULT_MODEL", "finetuned")  # finetuned or generic
 
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY')
 if GEMINI_API_KEY:
@@ -23,8 +30,10 @@ if GEMINI_API_KEY:
         print("gemini api ready")
     except Exception as e:
         print(f"gemini setup failed: {e}")
+        gemini_model = None
 else:
     print("no gemini key found - summaries will be basic")
+    gemini_model = None
 
 app = FastAPI(title="Resume-Job Matcher API", version="1.0.0")
 
@@ -109,17 +118,18 @@ async def generate_fit_summary(job_description: str, resume_text: str) -> str:
 async def match_resumes(
     job_description: str = Form(...),
     files: List[UploadFile] = File(...),
-    model_choice: str = Form('finetuned') 
+    model_choice: str = Form(None)
 ):
-    # Receives a job description, resumes, and a model choice, then returns top matches.
+    selected_model_name = model_choice or DEFAULT_MODEL
+
     if not models:
         raise HTTPException(status_code=503, detail="Models are not available. Please check server logs.")
 
-    selected_model = models.get(model_choice)
+    selected_model = models.get(selected_model_name)
     if not selected_model:
         raise HTTPException(status_code=400, detail=f"Invalid model choice. Available: {list(models.keys())}")
 
-    print(f"Processing request with '{model_choice}' model.")
+    print(f"Processing request with '{selected_model_name}' model.")
 
     # 1. Encode the Job Description
     job_embedding = selected_model.encode([job_description])
@@ -135,12 +145,12 @@ async def match_resumes(
 
     # 3. Compute Similarity and Rank
     similarities = cosine_similarity(job_embedding, resume_embeddings)[0]
-    top_indices = similarities.argsort()[::-1][:5] # Get top 5
+    top_indices = similarities.argsort()[::-1][:TOP_N]
 
     # 4. Generate Results
     results = []
     for idx in top_indices:
-        similarity_score = round(float(similarities[idx]) * 100, 2) # Convert to percentage from cosine similarity
+        similarity_score = round(float(similarities[idx]) * 100, 2)
         summary = await generate_fit_summary(job_description, resume_texts[idx])
         results.append({
             "candidate_id": files[idx].filename,
@@ -152,4 +162,4 @@ async def match_resumes(
 
 @app.get("/")
 def read_root():
-    return {"status": "API is running", "models_loaded": list(models.keys()), "gemini_available": gemini_model is not None}
+    return {"status": "API is running", "models_loaded": list(models.keys()), "gemini_available": gemini_model is not None, "top_n": TOP_N, "default_model": DEFAULT_MODEL}

@@ -1,8 +1,8 @@
-// frontend/src/App.js
-
 import React, { useState, useCallback } from 'react';
 import axios from 'axios';
 import './App.css';
+
+const API_BASE = process.env.REACT_APP_API_URL || 'http://127.0.0.1:8000';
 
 function App() {
   const [jobDescription, setJobDescription] = useState('');
@@ -79,7 +79,7 @@ function App() {
     });
 
     try {
-      const response = await axios.post('http://127.0.0.1:8000/match/', formData, {
+      const response = await axios.post(`${API_BASE}/match/`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -283,5 +283,4 @@ function App() {
     </div>
   );
 }
-
 export default App;
