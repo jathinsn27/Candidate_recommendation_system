@@ -10,9 +10,6 @@ __pycache__/
 *.pyd
 
 # Models & training outputs
-backend/training/checkpoints/
-backend/training/finetuned_model/
-backend/finetuned_model/
 *.safetensors
 *.bin
 
